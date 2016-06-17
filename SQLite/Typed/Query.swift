@@ -21,7 +21,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-
 public protocol QueryType : Expressible {
 
     var clauses: QueryClauses { get set }
@@ -578,6 +577,10 @@ extension QueryType {
         return insert(or: onConflict, values)
     }
 
+    public func insert(or onConflict: OnConflict, _ values: [Setter]) -> Insert {
+        return insert(onConflict, values)
+    }
+
     public func insert(dicinfo:NSDictionary)->Insert{
         var insert_setter_dic = [Setter]()
         
@@ -601,10 +604,6 @@ extension QueryType {
         return insert(insert_setter_dic)
     }
     
-    public func insert(or onConflict: OnConflict, _ values: [Setter]) -> Insert {
-        return insert(onConflict, values)
-    }
-
     private func insert(or: OnConflict?, _ values: [Setter]) -> Insert {
         let insert = values.reduce((columns: [Expressible](), values: [Expressible]())) { insert, setter in
             (insert.columns + [setter.column], insert.values + [setter.value])
@@ -665,6 +664,29 @@ extension QueryType {
         return Update(" ".join(clauses.flatMap { $0 }).expression)
     }
 
+    public func update(dicinfo:NSDictionary)->Update{
+        var insert_setter_dic = [Setter]()
+        
+        for (key,value) in dicinfo as! [String:NSObject] {
+            switch value{
+            case is NSString:
+                insert_setter_dic.append(Expression<String>(key) <- (value as! String))
+            case is Int:
+                let _t =  (value as! NSNumber)
+                if(_t.stringValue.containsString(".")){
+                    insert_setter_dic.append(Expression<Double>(key) <- _t.doubleValue )
+                }else{
+                    insert_setter_dic.append(Expression<Int64>(key) <- _t.longLongValue)
+                }
+            case is NSNull:
+                insert_setter_dic.append(Expression<Bool?>(key) <- nil)
+            default:
+                insert_setter_dic.append(Expression<Bool?>(key) <- nil)
+            }
+        }
+        return update(insert_setter_dic)
+    }
+    
     // MARK: DELETE
 
     public func delete() -> Delete {
@@ -765,13 +787,6 @@ extension QueryType {
             Expression<Void>(literal: "AS"),
             Expression<Void>(alias)
         ])
-    }
-
-    func tableName(qualified qualified: Bool) -> Expressible {
-        if qualified {
-            return tableName()
-        }
-        return Expression<Void>(clauses.from.alias ?? clauses.from.name)
     }
 
     func database(namespace name: String) -> Expressible {
@@ -1042,7 +1057,7 @@ public struct Row {
         self.columnNames = columnNames
         self.values = values
     }
-    
+
     /// Returns a row’s value for the given column.
     ///
     /// - Parameter column: An expression representing a column selected in a Query.
@@ -1058,7 +1073,7 @@ public struct Row {
                 _result[key] = v as! NSString
                 break
             case is Int64:
-                _result[key] = Int(v as! Int64)
+                _result[key] = NSNumber(longLong:v as! Int64)
                 break
             case is Bool:
                 _result[key] = v as! Bool
@@ -1066,18 +1081,13 @@ public struct Row {
             case is Double:
                 _result[key] = v as! Double
             case nil:
-                _result[key] = NSNULL()
+                _result[key] = NSNull()
             default:
                 _result[key] = false
             }
         }
         return _result
     }
-    /// Returns a row’s value for the given column.
-    ///
-    /// - Parameter column: An expression representing a column selected in a Query.
-    ///
-    /// - Returns: The value for the given column.
     public func get<V: Value>(column: Expression<V>) -> V {
         return get(Expression<V?>(column))!
     }
